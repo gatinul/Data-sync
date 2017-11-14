@@ -1,8 +1,12 @@
 package mavenCanal.mavenCanal;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.commons.lang.SystemUtils;
 import org.slf4j.Logger;
@@ -21,6 +25,7 @@ import com.alibaba.otter.canal.protocol.CanalEntry.RowData;
 import com.alibaba.otter.canal.protocol.CanalEntry.TransactionBegin;
 import com.alibaba.otter.canal.protocol.CanalEntry.TransactionEnd;
 import com.alibaba.otter.canal.protocol.Message;
+import com.gatinul.rabbitmq.Product;
 import com.google.protobuf.InvalidProtocolBufferException;
 
 /**
@@ -29,7 +34,7 @@ import com.google.protobuf.InvalidProtocolBufferException;
  * @author jianghang 2013-4-15 下午04:17:12
  * @version 1.0.4
  */
-public class AbstractCanalClientTest {
+public class AbstractCanalClientTest extends Product{
 
     protected final static Logger             logger             = LoggerFactory.getLogger(AbstractCanalClientTest.class);
     protected static final String             SEP                = SystemUtils.LINE_SEPARATOR;
@@ -161,7 +166,7 @@ public class AbstractCanalClientTest {
                + entry.getHeader().getExecuteTime() + "(" + format.format(date) + ")";
     }
 
-    protected void printEntry(List<Entry> entrys) {
+    protected void printEntry(List<Entry> entrys) throws Exception {
         for (Entry entry : entrys) {
             long executeTime = entry.getHeader().getExecuteTime();
             long delayTime = new Date().getTime() - executeTime;
@@ -219,16 +224,26 @@ public class AbstractCanalClientTest {
                     logger.info(" sql ----> " + rowChage.getSql() + SEP);
                     continue;
                 }
-
+                Map map = new HashMap();
                 for (RowData rowData : rowChage.getRowDatasList()) {
                     if (eventType == EventType.DELETE) {
                         printColumn(rowData.getBeforeColumnsList());
+                        map.put("doc", rabbitColumn(rowData.getBeforeColumnsList()));
                     } else if (eventType == EventType.INSERT) {
                         printColumn(rowData.getAfterColumnsList());
+                        map.put("doc", rabbitColumn(rowData.getAfterColumnsList()));
                     } else {
                         printColumn(rowData.getAfterColumnsList());
+                        map.put("doc", rabbitColumn(rowData.getAfterColumnsList()));
                     }
                 }
+                /* 这里发送 rabbitmq 队列 */
+               
+                map.put("index", entry.getHeader().getSchemaName());
+                map.put("type", entry.getHeader().getTableName());
+                map.put("eventType", eventType);
+                
+                main(map);
             }
         }
     }
@@ -242,8 +257,21 @@ public class AbstractCanalClientTest {
                 builder.append("    update=" + column.getUpdated());
             }
             builder.append(SEP);
-            logger.info(builder.toString());
+            logger.info("*"+builder.toString());
         }
+    }
+    public List<StringBuilder> rabbitColumn(List<Column> columns) {
+    		List<StringBuilder> list = new ArrayList<StringBuilder>();
+    		for (Column column : columns) {
+    			StringBuilder builder = new StringBuilder();
+    			builder.append(column.getName() + " : " + column.getValue());
+            builder.append("    type=" + column.getMysqlType());
+            if (column.getUpdated()) {
+                builder.append("    update=" + column.getUpdated());
+            }
+            list.add(builder);
+    		}
+    		return list;
     }
 
     public void setConnector(CanalConnector connector) {
