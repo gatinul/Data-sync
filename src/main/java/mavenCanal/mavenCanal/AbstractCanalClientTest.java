@@ -267,6 +267,9 @@ public class AbstractCanalClientTest extends Product{
             	    builder.append(" "+column.getName());
             		map.put(column.getName(), column.getValue());
             }
+            if(column.getName().equals("id")) {
+            		map.put("id", column.getValue());
+            }
             
     		}
     		map.put("mqUpdate", builder.toString());
